@@ -32,23 +32,48 @@ SCOPES = [
 ]
 
 
+def _parse_service_account_info(raw_value: str) -> dict[str, Any]:
+    raw = str(raw_value or "").strip()
+    if not raw:
+        raise ValueError("GOOGLE_SERVICE_ACCOUNT_JSON が未設定です。Streamlit Cloud の Secrets を確認してください。")
+
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        preview = raw[:160].replace("\n", "\\n")
+        raise ValueError(
+            "サービスアカウントJSONの解析に失敗しました。"
+            f" Secrets の形式が壊れています。先頭確認: {preview} / error: {exc}"
+        ) from exc
+
+    if not isinstance(parsed, dict):
+        raise ValueError("サービスアカウント情報がJSONオブジェクトではありません。")
+
+    required_keys = [
+        "type",
+        "project_id",
+        "private_key",
+        "client_email",
+        "token_uri",
+    ]
+    missing = [key for key in required_keys if not str(parsed.get(key, "")).strip()]
+    if missing:
+        raise ValueError(f"サービスアカウント情報に必須項目が足りません: {', '.join(missing)}")
+
+    return parsed
+
+
 @st.cache_resource
 def _get_gspread_client():
     if not GOOGLE_SERVICE_ACCOUNT_JSON:
-        raise ValueError("GOOGLE_SERVICE_ACCOUNT_JSON が未設定です。secrets.toml を確認してください。")
+        raise ValueError("GOOGLE_SERVICE_ACCOUNT_JSON が未設定です。secrets を確認してください。")
 
     if not GOOGLE_SPREADSHEET_ID:
-        raise ValueError("GOOGLE_SPREADSHEET_ID が未設定です。secrets.toml を確認してください。")
+        raise ValueError("GOOGLE_SPREADSHEET_ID が未設定です。secrets を確認してください。")
 
-    service_account_info = json.loads(GOOGLE_SERVICE_ACCOUNT_JSON)
+    service_account_info = _parse_service_account_info(GOOGLE_SERVICE_ACCOUNT_JSON)
     credentials = Credentials.from_service_account_info(service_account_info, scopes=SCOPES)
-    return gspread.authorize(credentials)
-
-
-@st.cache_resource
-def get_spreadsheet():
-    client = _get_gspread_client()
-    return client.open_by_key(GOOGLE_SPREADSHEET_ID)
+    return gspread.authorize(credentials))
 
 
 def _safe_api_call(func, *args, retries: int = 4, wait_seconds: float = 1.2, **kwargs):
