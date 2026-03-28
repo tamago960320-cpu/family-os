@@ -87,6 +87,12 @@ def _get_gspread_client():
     return gspread.authorize(credentials)
 
 
+@st.cache_resource
+def get_spreadsheet():
+    client = _get_gspread_client()
+    return client.open_by_key(GOOGLE_SPREADSHEET_ID)
+
+
 def _safe_api_call(func, *args, retries: int = 4, wait_seconds: float = 1.2, **kwargs):
     last_error = None
     for attempt in range(retries):
