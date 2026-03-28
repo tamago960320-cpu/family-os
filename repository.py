@@ -76,9 +76,6 @@ def _parse_service_account_info(raw_value: str) -> dict[str, Any]:
 
 @st.cache_resource
 def _get_gspread_client():
-    if not GOOGLE_SERVICE_ACCOUNT_JSON:
-        raise ValueError("GOOGLE_SERVICE_ACCOUNT_JSON が未設定です。secrets を確認してください。")
-
     if not GOOGLE_SPREADSHEET_ID:
         raise ValueError("GOOGLE_SPREADSHEET_ID が未設定です。secrets を確認してください。")
 
