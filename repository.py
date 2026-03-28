@@ -32,17 +32,41 @@ SCOPES = [
 ]
 
 
-@st.cache_resource
-def _get_gspread_client():
-    if not GOOGLE_SERVICE_ACCOUNT_JSON:
-        raise ValueError("GOOGLE_SERVICE_ACCOUNT_JSON が未設定です。secrets.toml を確認してください。")
+@st.cache_resource(show_spinner=False)
+def get_gspread_client():
+    if gspread is None or Credentials is None:
+        raise ConfigError(
+            user_message="必要なライブラリが不足しています。",
+            detail="gspread / google-auth が未インストールです。",
+            hint="pip install gspread google-auth を実行してからもう一度起動してね。",
+            code="LIBRARY_MISSING",
+        )
 
-    if not GOOGLE_SPREADSHEET_ID:
-        raise ValueError("GOOGLE_SPREADSHEET_ID が未設定です。secrets.toml を確認してください。")
+    # ここからの3箇所の名前を GOOGLE_SERVICE_ACCOUNT に書き換えるよ
+    if "GOOGLE_SERVICE_ACCOUNT" not in st.secrets:
+        raise ConfigError(
+            user_message="Google Sheets 接続設定が不足しています。",
+            detail="st.secrets に GOOGLE_SERVICE_ACCOUNT がありません。",
+            hint="Streamlit の secrets に GOOGLE_SERVICE_ACCOUNT を設定してね。",
+            code="GCP_SERVICE_ACCOUNT_MISSING",
+        )
 
-    service_account_info = json.loads(GOOGLE_SERVICE_ACCOUNT_JSON)
-    credentials = Credentials.from_service_account_info(service_account_info, scopes=SCOPES)
-    return gspread.authorize(credentials)
+    try:
+        # 実際に情報を読み取るここも GOOGLE_SERVICE_ACCOUNT に合わせるよ
+        creds_info = dict(st.secrets["GOOGLE_SERVICE_ACCOUNT"])
+        scopes = [
+            "https://www.googleapis.com/auth/spreadsheets",
+            "https://www.googleapis.com/auth/drive",
+        ]
+        credentials = Credentials.from_service_account_info(creds_info, scopes=scopes)
+        return gspread.authorize(credentials)
+    except Exception as exc:
+        raise ConfigError(
+            user_message="Google Sheets の認証に失敗しました。",
+            detail=str(exc),
+            hint="サービスアカウント情報の内容や改行崩れを確認してね。",
+            code="GSPREAD_AUTH_FAILED",
+        ) from exc
 
 
 @st.cache_resource
