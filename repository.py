@@ -35,19 +35,30 @@ SCOPES = [
 def _parse_service_account_info(raw_value: str) -> dict[str, Any]:
     raw = str(raw_value or "").strip()
     if not raw:
-        raise ValueError("GOOGLE_SERVICE_ACCOUNT_JSON が未設定です。Streamlit Cloud の Secrets を確認してください。")
+        raise ValueError("GOOGLE_SERVICE_ACCOUNT_JSON が空です。Secrets を確認してください。")
 
     try:
         parsed = json.loads(raw)
-    except json.JSONDecodeError as exc:
-        preview = raw[:160].replace("\n", "\\n")
+    except Exception as exc:
+        preview = raw[:200].replace("\n", "\\n")
         raise ValueError(
-            "サービスアカウントJSONの解析に失敗しました。"
-            f" Secrets の形式が壊れています。先頭確認: {preview} / error: {exc}"
+            f"サービスアカウントJSONを読めません。preview={preview} / error={exc}"
         ) from exc
 
+    # 1回 decode して文字列だったら、JSON文字列がさらに文字列として入っている
+    if isinstance(parsed, str):
+        try:
+            parsed = json.loads(parsed)
+        except Exception as exc:
+            preview = str(parsed)[:200].replace("\n", "\\n")
+            raise ValueError(
+                f"サービスアカウントJSONが二重文字列になっています。preview={preview} / error={exc}"
+            ) from exc
+
     if not isinstance(parsed, dict):
-        raise ValueError("サービスアカウント情報がJSONオブジェクトではありません。")
+        raise ValueError(
+            f"サービスアカウント情報がJSONオブジェクトではありません。type={type(parsed).__name__} / value={str(parsed)[:200]}"
+        )
 
     required_keys = [
         "type",
