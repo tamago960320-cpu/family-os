@@ -1,5 +1,6 @@
 import json
 import os
+from collections.abc import Mapping
 
 import streamlit as st
 
@@ -7,13 +8,20 @@ APP_NAME = "家族OS / 育児AIアシスタント"
 APP_ICON = "🍼"
 
 
+def _normalize_secret_value(value) -> str:
+    if value is None:
+        return ""
+
+    if isinstance(value, Mapping):
+        return json.dumps(dict(value), ensure_ascii=False)
+
+    return str(value)
+
+
 def _get_secret_value(key: str, default: str = "") -> str:
     try:
         if key in st.secrets:
-            value = st.secrets[key]
-            if isinstance(value, dict):
-                return json.dumps(dict(value), ensure_ascii=False)
-            return str(value)
+            return _normalize_secret_value(st.secrets[key])
     except Exception:
         pass
     return str(os.getenv(key, default))
@@ -26,10 +34,7 @@ def _get_service_account_json() -> str:
 
     try:
         if "GOOGLE_SERVICE_ACCOUNT" in st.secrets:
-            value = st.secrets["GOOGLE_SERVICE_ACCOUNT"]
-            if isinstance(value, dict):
-                return json.dumps(dict(value), ensure_ascii=False)
-            return str(value)
+            return _normalize_secret_value(st.secrets["GOOGLE_SERVICE_ACCOUNT"])
     except Exception:
         pass
 
