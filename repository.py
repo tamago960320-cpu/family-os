@@ -84,7 +84,7 @@ def _get_gspread_client():
 
     service_account_info = _parse_service_account_info(GOOGLE_SERVICE_ACCOUNT_JSON)
     credentials = Credentials.from_service_account_info(service_account_info, scopes=SCOPES)
-    return gspread.authorize(credentials))
+    return gspread.authorize(credentials)
 
 
 def _safe_api_call(func, *args, retries: int = 4, wait_seconds: float = 1.2, **kwargs):
