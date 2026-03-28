@@ -1,5 +1,6 @@
 import json
 import os
+from typing import Any
 
 import streamlit as st
 
@@ -19,19 +20,25 @@ def _get_secret_value(key: str, default: str = "") -> str:
     return str(os.getenv(key, default))
 
 
+def _get_secret_object(key: str) -> dict[str, Any]:
+    try:
+        if key in st.secrets:
+            value = st.secrets[key]
+            if isinstance(value, dict):
+                return dict(value)
+    except Exception:
+        pass
+    return {}
+
+
 def _get_service_account_json() -> str:
-    raw = _get_secret_value("GOOGLE_SERVICE_ACCOUNT_JSON", "")
+    raw = _get_secret_value("GOOGLE_SERVICE_ACCOUNT_JSON", "").strip()
     if raw:
         return raw
 
-    try:
-        if "GOOGLE_SERVICE_ACCOUNT" in st.secrets:
-            value = st.secrets["GOOGLE_SERVICE_ACCOUNT"]
-            if isinstance(value, dict):
-                return json.dumps(dict(value), ensure_ascii=False)
-            return str(value)
-    except Exception:
-        pass
+    obj = _get_secret_object("GOOGLE_SERVICE_ACCOUNT")
+    if obj:
+        return json.dumps(obj, ensure_ascii=False)
 
     return ""
 
