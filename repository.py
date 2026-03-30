@@ -12,18 +12,19 @@ from gspread.exceptions import APIError, WorksheetNotFound
 
 from config import (
     DEFAULT_CACHE_TTL_SECONDS,
+    FAMILY_CONTEXT_KEYS,
     GOOGLE_SERVICE_ACCOUNT_JSON,
     GOOGLE_SPREADSHEET_ID,
     REQUIRED_SHEETS,
     SHEET_BABY_LOGS,
     SHEET_CONSULTATION_LOGS,
     SHEET_DAILY_SUMMARY,
+    SHEET_FAMILY_CONTEXT,
+    SHEET_FAMILY_SCHEDULE,
     SHEET_MASTER_SETTINGS,
     SHEET_MOTHER_LOGS,
     SHEET_PREGNANCY_LOGS,
     SHEET_TASKS,
-    FAMILY_CONTEXT_KEYS,
-    SHEET_FAMILY_CONTEXT,
 )
 
 SCOPES = [
@@ -122,7 +123,7 @@ def _ensure_headers(sheet_name: str):
             spreadsheet.add_worksheet,
             title=sheet_name,
             rows=1000,
-            cols=max(len(required_headers), 10),
+            cols=max(len(required_headers), 12),
         )
         _safe_api_call(worksheet.update, "A1", [required_headers])
         return
@@ -219,6 +220,10 @@ def get_last_record(sheet_name: str, category: str | None = None) -> dict[str, A
 
 def generate_record_id(prefix: str = "rec") -> str:
     return f"{prefix}_{uuid.uuid4().hex[:10]}"
+
+
+def generate_schedule_id() -> str:
+    return f"sch_{uuid.uuid4().hex[:10]}"
 
 
 def now_iso() -> str:
@@ -585,6 +590,146 @@ def reopen_task(task_id: str) -> bool:
     )
 
 
+def add_family_schedule(
+    schedule_type: str,
+    title: str,
+    subcategory: str,
+    target_name: str,
+    start_date: str,
+    due_date: str,
+    status: str,
+    priority: str,
+    owner: str,
+    shared_to: str,
+    reminder_days_before: str,
+    memo: str,
+    source: str = "manual",
+) -> str:
+    now_value = now_iso()
+    schedule_id = generate_schedule_id()
+    completed_at = now_value if str(status) == "完了" else ""
+
+    append_row(
+        SHEET_FAMILY_SCHEDULE,
+        {
+            "schedule_id": schedule_id,
+            "schedule_type": schedule_type,
+            "title": title,
+            "subcategory": subcategory,
+            "target_name": target_name,
+            "start_date": start_date,
+            "due_date": due_date,
+            "status": status,
+            "priority": priority,
+            "owner": owner,
+            "shared_to": shared_to,
+            "reminder_days_before": reminder_days_before,
+            "memo": memo,
+            "source": source,
+            "created_at": now_value,
+            "updated_at": now_value,
+            "completed_at": completed_at,
+        },
+    )
+    return schedule_id
+
+
+def update_family_schedule(
+    schedule_id: str,
+    schedule_type: str,
+    title: str,
+    subcategory: str,
+    target_name: str,
+    start_date: str,
+    due_date: str,
+    status: str,
+    priority: str,
+    owner: str,
+    shared_to: str,
+    reminder_days_before: str,
+    memo: str,
+    source: str = "manual",
+) -> bool:
+    df = read_sheet(SHEET_FAMILY_SCHEDULE)
+    if df.empty or "schedule_id" not in df.columns:
+        return False
+
+    target = df[df["schedule_id"].astype(str) == str(schedule_id)]
+    if target.empty:
+        return False
+
+    row = target.iloc[0]
+    existing_completed_at = str(row.get("completed_at", "")).strip()
+    if status == "完了":
+        completed_at = existing_completed_at or now_iso()
+    else:
+        completed_at = ""
+
+    return update_row_by_id(
+        SHEET_FAMILY_SCHEDULE,
+        "schedule_id",
+        schedule_id,
+        {
+            "schedule_type": schedule_type,
+            "title": title,
+            "subcategory": subcategory,
+            "target_name": target_name,
+            "start_date": start_date,
+            "due_date": due_date,
+            "status": status,
+            "priority": priority,
+            "owner": owner,
+            "shared_to": shared_to,
+            "reminder_days_before": reminder_days_before,
+            "memo": memo,
+            "source": source,
+            "updated_at": now_iso(),
+            "completed_at": completed_at,
+        },
+    )
+
+
+def complete_family_schedule(schedule_id: str) -> bool:
+    return update_row_by_id(
+        SHEET_FAMILY_SCHEDULE,
+        "schedule_id",
+        schedule_id,
+        {
+            "status": "完了",
+            "updated_at": now_iso(),
+            "completed_at": now_iso(),
+        },
+    )
+
+
+def reopen_family_schedule(schedule_id: str) -> bool:
+    return update_row_by_id(
+        SHEET_FAMILY_SCHEDULE,
+        "schedule_id",
+        schedule_id,
+        {
+            "status": "未着手",
+            "updated_at": now_iso(),
+            "completed_at": "",
+        },
+    )
+
+
+def get_family_schedule_by_id(schedule_id: str) -> dict[str, Any]:
+    if not schedule_id:
+        return {}
+
+    df = read_sheet(SHEET_FAMILY_SCHEDULE)
+    if df.empty or "schedule_id" not in df.columns:
+        return {}
+
+    target = df[df["schedule_id"].astype(str) == str(schedule_id)]
+    if target.empty:
+        return {}
+
+    return target.iloc[0].to_dict()
+
+
 def generate_consultation_id() -> str:
     return f"consult_{uuid.uuid4().hex[:10]}"
 
@@ -691,6 +836,7 @@ def add_daily_summary(date_value: str, summary_type: str, summary_text: str, gen
             "created_at": now_iso(),
         },
     )
+
 
 def get_family_context_dict() -> dict[str, str]:
     df = read_sheet(SHEET_FAMILY_CONTEXT)
