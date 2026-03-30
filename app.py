@@ -12,6 +12,7 @@ from config import (
     PAGE_ICONS,
     PAGE_MOTHER,
     PAGE_PREGNANCY,
+    PAGE_SCHEDULE,
     PAGE_SUMMARY,
     PAGE_TASKS,
     PAGES,
@@ -26,6 +27,7 @@ from repository import (
 from pages.home_page import render_home
 from pages.record_pages import render_baby, render_mother, render_pregnancy
 from pages.assist_pages import render_consult, render_summary, render_tasks
+from pages.schedule_page import render_schedule
 
 st.set_page_config(page_title=APP_NAME, page_icon=APP_ICON, layout="centered")
 
@@ -864,11 +866,12 @@ def main():
         render_summary()
     elif page == PAGE_TASKS:
         render_tasks(recorded_by)
+    elif page == PAGE_SCHEDULE:
+        render_schedule(recorded_by)
     elif page == PAGE_CONSULT:
         render_consult(recorded_by)
 
     render_bottom_nav()
-
 
 if __name__ == "__main__":
     main()
