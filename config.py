@@ -57,6 +57,7 @@ SHEET_DAILY_SUMMARY = "daily_summary"
 SHEET_MASTER_SETTINGS = "master_settings"
 SHEET_FAMILY_CONTEXT = "family_context"
 SHEET_NOTIFICATION_LOGS = "notification_logs"
+SHEET_FAMILY_SCHEDULE = "family_schedule"
 
 
 REQUIRED_SHEETS = {
@@ -146,6 +147,25 @@ REQUIRED_SHEETS = {
         "status",
         "sent_at",
     ],
+    SHEET_FAMILY_SCHEDULE: [
+        "schedule_id",
+        "schedule_type",
+        "title",
+        "subcategory",
+        "target_name",
+        "start_date",
+        "due_date",
+        "status",
+        "priority",
+        "owner",
+        "shared_to",
+        "reminder_days_before",
+        "memo",
+        "source",
+        "created_at",
+        "updated_at",
+        "completed_at",
+    ],
 }
 
 
@@ -189,6 +209,24 @@ TASK_TYPE_LABELS = {
 
 TASK_TYPE_OPTIONS_JA = list(TASK_TYPE_LABELS.values())
 
+SCHEDULE_TYPE_LABELS = {
+    "vaccination": "予防接種",
+    "nursery": "保活",
+    "checkup": "健診",
+    "paperwork": "手続き",
+    "family_event": "家族予定",
+}
+
+SCHEDULE_TYPE_OPTIONS_JA = list(SCHEDULE_TYPE_LABELS.values())
+SCHEDULE_STATUS_OPTIONS = ["未着手", "進行中", "完了", "見送り"]
+SCHEDULE_PRIORITY_OPTIONS = ["高", "中", "低"]
+SCHEDULE_SHARED_TO_OPTIONS = ["both", "issei", "ryoka"]
+SCHEDULE_SHARED_TO_LABELS = {
+    "both": "夫婦共有",
+    "issei": "いっせいのみ",
+    "ryoka": "りょうかのみ",
+}
+
 TASK_STATUS_OPTIONS = ["未着手", "進行中", "完了"]
 TASK_PRIORITY_OPTIONS = ["高", "中", "低"]
 RECORDED_BY_OPTIONS = ["いっせい", "りょうか"]
@@ -230,7 +268,7 @@ BABY_MILK_UNIT = "ml"
 BABY_SLEEP_UNIT = "分"
 
 PRIORITY_ORDER = {"高": 0, "中": 1, "低": 2}
-STATUS_ORDER = {"未着手": 0, "進行中": 1, "完了": 2}
+STATUS_ORDER = {"未着手": 0, "進行中": 1, "完了": 2, "見送り": 3}
 
 PAGE_HOME = "ホーム"
 PAGE_PREGNANCY = "妊娠後期"
@@ -238,6 +276,7 @@ PAGE_BABY = "新生児記録"
 PAGE_MOTHER = "母体ケア"
 PAGE_SUMMARY = "日次サマリー"
 PAGE_TASKS = "タスク"
+PAGE_SCHEDULE = "予定共有"
 PAGE_CONSULT = "相談AI"
 
 PAGES = [
@@ -247,6 +286,7 @@ PAGES = [
     PAGE_MOTHER,
     PAGE_SUMMARY,
     PAGE_TASKS,
+    PAGE_SCHEDULE,
     PAGE_CONSULT,
 ]
 
@@ -257,6 +297,7 @@ PAGE_ICONS = {
     PAGE_MOTHER: "🩺",
     PAGE_SUMMARY: "📊",
     PAGE_TASKS: "✅",
+    PAGE_SCHEDULE: "🗓️",
     PAGE_CONSULT: "💬",
 }
 
@@ -280,6 +321,7 @@ MASTER_SETTING_KEYS = {
     "notify_gap_check_enabled": "記録抜け漏れ通知",
     "notify_daily_attention_enabled": "今日の注意メモ通知",
     "notify_summary_on_update_enabled": "日次サマリー通知",
+    "notify_schedule_reminder_enabled": "予定リマインド通知",
 }
 
 FAMILY_CONTEXT_KEYS = {
