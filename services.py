@@ -7,21 +7,25 @@ import pandas as pd
 
 from config import (
     BABY_CATEGORY_LABELS,
+    FAMILY_CONTEXT_KEYS,
     HOME_LOOKBACK_HOURS,
     MAX_HOME_TASKS,
     MOTHER_CATEGORY_LABELS,
+    PAGE_SCHEDULE,
     PREGNANCY_CATEGORY_LABELS,
     PRIORITY_ORDER,
     RECENT_LOG_LIMIT,
+    SCHEDULE_SHARED_TO_LABELS,
+    SCHEDULE_TYPE_LABELS,
     SHEET_BABY_LOGS,
+    SHEET_FAMILY_CONTEXT,
+    SHEET_FAMILY_SCHEDULE,
     SHEET_MASTER_SETTINGS,
     SHEET_MOTHER_LOGS,
     SHEET_PREGNANCY_LOGS,
     SHEET_TASKS,
     STATUS_ORDER,
     TASK_TYPE_LABELS,
-    FAMILY_CONTEXT_KEYS,
-    SHEET_FAMILY_CONTEXT,
 )
 from repository import get_family_context_dict, get_master_settings_dict, read_sheet
 
@@ -208,11 +212,130 @@ def get_completed_tasks(tasks_df: pd.DataFrame) -> pd.DataFrame:
     return df.reset_index(drop=True)
 
 
+def get_open_schedules(schedule_df: pd.DataFrame) -> pd.DataFrame:
+    if schedule_df.empty:
+        return pd.DataFrame(
+            columns=[
+                "schedule_id",
+                "schedule_type",
+                "title",
+                "subcategory",
+                "target_name",
+                "start_date",
+                "due_date",
+                "status",
+                "priority",
+                "owner",
+                "shared_to",
+                "reminder_days_before",
+                "memo",
+                "source",
+                "created_at",
+                "updated_at",
+                "completed_at",
+            ]
+        )
+
+    df = schedule_df.copy()
+    for col in [
+        "schedule_type",
+        "title",
+        "subcategory",
+        "target_name",
+        "start_date",
+        "due_date",
+        "status",
+        "priority",
+        "owner",
+        "shared_to",
+        "reminder_days_before",
+        "memo",
+        "source",
+        "created_at",
+        "updated_at",
+        "completed_at",
+    ]:
+        if col not in df.columns:
+            df[col] = ""
+
+    df = df[df["status"].astype(str) != "完了"].copy()
+    if df.empty:
+        return df
+
+    df["priority_order"] = df["priority"].astype(str).map(PRIORITY_ORDER).fillna(99)
+    df["status_order"] = df["status"].astype(str).map(STATUS_ORDER).fillna(99)
+    df["due_dt"] = pd.to_datetime(df["due_date"], errors="coerce")
+    df["start_dt"] = pd.to_datetime(df["start_date"], errors="coerce")
+    df["created_dt"] = pd.to_datetime(df["created_at"], errors="coerce")
+    df = df.sort_values(
+        ["priority_order", "status_order", "due_dt", "start_dt", "created_dt", "title"],
+        ascending=[True, True, True, True, True, True],
+    )
+    return df.reset_index(drop=True)
+
+
+def get_completed_schedules(schedule_df: pd.DataFrame) -> pd.DataFrame:
+    if schedule_df.empty:
+        return pd.DataFrame(
+            columns=[
+                "schedule_id",
+                "schedule_type",
+                "title",
+                "subcategory",
+                "target_name",
+                "start_date",
+                "due_date",
+                "status",
+                "priority",
+                "owner",
+                "shared_to",
+                "reminder_days_before",
+                "memo",
+                "source",
+                "created_at",
+                "updated_at",
+                "completed_at",
+            ]
+        )
+
+    df = schedule_df.copy()
+    for col in [
+        "schedule_type",
+        "title",
+        "subcategory",
+        "target_name",
+        "start_date",
+        "due_date",
+        "status",
+        "priority",
+        "owner",
+        "shared_to",
+        "reminder_days_before",
+        "memo",
+        "source",
+        "created_at",
+        "updated_at",
+        "completed_at",
+    ]:
+        if col not in df.columns:
+            df[col] = ""
+
+    df = df[df["status"].astype(str) == "完了"].copy()
+    if df.empty:
+        return df
+
+    df["completed_dt"] = pd.to_datetime(df["completed_at"], errors="coerce")
+    df["due_dt"] = pd.to_datetime(df["due_date"], errors="coerce")
+    df = df.sort_values(["completed_dt", "due_dt", "title"], ascending=[False, True, True])
+    return df.reset_index(drop=True)
+
+
 def build_home_dashboard_snapshot(limit_tasks: int = MAX_HOME_TASKS) -> dict[str, Any]:
     baby_df = read_sheet(SHEET_BABY_LOGS)
     mother_df = read_sheet(SHEET_MOTHER_LOGS)
     pregnancy_df = read_sheet(SHEET_PREGNANCY_LOGS)
     tasks_df = read_sheet(SHEET_TASKS)
+    schedule_df = read_sheet(SHEET_FAMILY_SCHEDULE)
 
     recent_baby = get_recent_from_df(baby_df, HOME_LOOKBACK_HOURS)
     recent_mother = get_recent_from_df(mother_df, HOME_LOOKBACK_HOURS)
@@ -223,6 +346,7 @@ def build_home_dashboard_snapshot(limit_tasks: int = MAX_HOME_TASKS) -> dict[str
     pregnancy_today = get_today_from_df(pregnancy_df)
 
     open_tasks = get_open_tasks(tasks_df).head(limit_tasks).copy()
+    open_schedules = get_open_schedules(schedule_df).head(5).copy()
 
     return {
         "baby_last_feeding": get_last_record_from_df(baby_df, "feeding"),
@@ -243,6 +367,8 @@ def build_home_dashboard_snapshot(limit_tasks: int = MAX_HOME_TASKS) -> dict[str
         },
         "tasks_df": tasks_df,
         "open_tasks": open_tasks,
+        "schedule_df": schedule_df,
+        "open_schedules": open_schedules,
     }
 
 
@@ -414,6 +540,82 @@ def build_task_history_rows(df: pd.DataFrame, limit: int = 20) -> pd.DataFrame:
     return work[["完了日時", "作成日時", "期限", "種別", "タイトル", "優先度", "担当"]].reset_index(drop=True)
 
 
+def build_schedule_display_rows(df: pd.DataFrame, limit: int = 50) -> pd.DataFrame:
+    if df.empty:
+        return pd.DataFrame(columns=["期限", "種別", "タイトル", "対象", "共有", "優先度", "状態", "担当"])
+
+    work = df.copy().head(limit)
+    work["期限"] = work.get("due_date", "").astype(str)
+    work["種別"] = work.get("schedule_type", "").astype(str).map(lambda x: SCHEDULE_TYPE_LABELS.get(x, x))
+    work["タイトル"] = work.get("title", "").astype(str)
+    work["対象"] = work.get("target_name", "").astype(str)
+    work["共有"] = work.get("shared_to", "").astype(str).map(lambda x: SCHEDULE_SHARED_TO_LABELS.get(x, x))
+    work["優先度"] = work.get("priority", "").astype(str)
+    work["状態"] = work.get("status", "").astype(str)
+    work["担当"] = work.get("owner", "").astype(str)
+    return work[["期限", "種別", "タイトル", "対象", "共有", "優先度", "状態", "担当"]].reset_index(drop=True)
+
+
+def build_schedule_history_rows(df: pd.DataFrame, limit: int = 30) -> pd.DataFrame:
+    if df.empty:
+        return pd.DataFrame(columns=["完了日時", "期限", "種別", "タイトル", "対象", "共有", "担当"])
+
+    work = df.copy().head(limit)
+    work["完了日時"] = work.get("completed_at", "").astype(str).map(lambda x: format_datetime_label(x, ""))
+    work["期限"] = work.get("due_date", "").astype(str)
+    work["種別"] = work.get("schedule_type", "").astype(str).map(lambda x: SCHEDULE_TYPE_LABELS.get(x, x))
+    work["タイトル"] = work.get("title", "").astype(str)
+    work["対象"] = work.get("target_name", "").astype(str)
+    work["共有"] = work.get("shared_to", "").astype(str).map(lambda x: SCHEDULE_SHARED_TO_LABELS.get(x, x))
+    work["担当"] = work.get("owner", "").astype(str)
+    return work[["完了日時", "期限", "種別", "タイトル", "対象", "共有", "担当"]].reset_index(drop=True)
+
+
+def build_schedule_edit_options(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty or "schedule_id" not in df.columns:
+        return pd.DataFrame(columns=["schedule_id", "表示"])
+
+    work = df.copy()
+    for col in [
+        "due_date",
+        "schedule_type",
+        "title",
+        "priority",
+        "owner",
+        "status",
+        "target_name",
+        "completed_at",
+    ]:
+        if col not in work.columns:
+            work[col] = ""
+
+    work["種別表示"] = work["schedule_type"].astype(str).map(lambda x: SCHEDULE_TYPE_LABELS.get(x, x))
+    work["表示"] = (
+        work["due_date"].astype(str).fillna("")
+        + " | "
+        + work["種別表示"].astype(str).fillna("")
+        + " | "
+        + work["title"].astype(str).fillna("")
+        + " | "
+        + work["priority"].astype(str).fillna("")
+        + " | "
+        + work["owner"].astype(str).fillna("")
+        + " | "
+        + work["status"].astype(str).fillna("")
+    )
+
+    work["priority_order"] = work["priority"].astype(str).map(PRIORITY_ORDER).fillna(99)
+    work["status_order"] = work["status"].astype(str).map(STATUS_ORDER).fillna(99)
+    work["completed_dt"] = pd.to_datetime(work["completed_at"], errors="coerce")
+    work["due_dt"] = pd.to_datetime(work["due_date"], errors="coerce")
+    work = work.sort_values(
+        ["status_order", "priority_order", "due_dt", "completed_dt", "title"],
+        ascending=[True, True, True, False, True],
+    )
+
+    return work[["schedule_id", "表示"]].reset_index(drop=True)
+
+
 def build_category_count_rows(df: pd.DataFrame, mapping: dict[str, str]) -> pd.DataFrame:
     counted = count_by_category(df)
     if counted.empty:
@@ -501,9 +703,15 @@ def build_consultation_context_text() -> str:
     else:
         lines.append("未完了タスク:")
         for _, row in open_tasks.iterrows():
-            lines.append(
-                f"- {row['期限']} / {row['種別']} / {row['タイトル']} / {row['優先度']} / {row['担当']}"
-            )
+            lines.append(f"- {row['期限']} / {row['種別']} / {row['タイトル']} / {row['優先度']} / {row['担当']}")
+
+    open_schedules = build_schedule_display_rows(snapshot["open_schedules"], limit=5)
+    if open_schedules.empty:
+        lines.append("近い予定: なし")
+    else:
+        lines.append("近い予定:")
+        for _, row in open_schedules.iterrows():
+            lines.append(f"- {row['期限']} / {row['種別']} / {row['タイトル']} / {row['対象']} / {row['担当']}")
 
     recent_sections = [
         ("赤ちゃん直近", build_recent_display_rows(snapshot["recent_baby"], BABY_CATEGORY_LABELS, limit=5)),
@@ -529,6 +737,7 @@ def build_consultation_context_text() -> str:
                 lines.append(f"- {row['項目']}: {row['値']}")
 
     return "\n".join(lines)
+
 
 def build_family_context_text() -> str:
     context = get_family_context_dict()
