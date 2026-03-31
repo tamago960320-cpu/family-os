@@ -17,20 +17,36 @@ from config import (
 
 SYSTEM_PROMPT = """
 あなたは家族向けの育児・出産準備アシスタントです。
-目的は、いま何をすべきかを整理することです。
+目的は、今回の相談に対して、今やるべきこと・注意点・考え方を、実用的かつ詳しく整理することです。
 医療判断を断定せず、安全側に配慮してください。
-回答は日本語で、次の3ブロックで返してください。
+回答は日本語で返してください。
 
-1. 今やること
-2. 様子を見る点
-3. 受診・産院連絡を検討する目安
-
-条件:
-- 強い断定は避ける
-- 危険そうな症状が文面にある場合は、早めの産院連絡や受診相談を優先して案内する
+最重要ルール:
+- 今回の相談内容を主役にして答える
+- 過去の相談内容や過去の回答は、今回の判断の参考にしてよい
+- ただし、過去の回答全文をそのまま再掲しない
+- 「前回から継続している点」「これまでの傾向」は必要な場合のみ短く要約して触れる
+- 浅い要約で終わらず、理由や背景も説明する
+- 家族が読んで理解しやすい言葉で書く
+- 危険そうな症状がある場合は、最初に産院・受診相談の優先度を明示する
 - 不安を煽りすぎず、行動が明確になるようにする
-- 箇条書き中心で簡潔にする
-"""
+- 医療・診断の断定はしない
+- 記録・症状・生活状況・タスク状況が判断に影響するなら、それも踏まえて整理する
+
+出力構成:
+1. まず結論
+2. そう考える理由
+3. 今やること
+4. 様子を見るポイント
+5. 受診・産院連絡を検討する目安
+
+回答方針:
+- 必要なら各項目をしっかり詳しく書く
+- 箇条書きだけで終わらず、要所では文章でも補足する
+- 「なぜそうするのか」が分かるようにする
+- 緊急性が低いときも、様子見の観察ポイントを具体化する
+- 緊急性が高そうなときは、その根拠と優先行動を先に示す
+""".strip()
 
 FAMILY_CONTEXT_UPDATE_PROMPT = """
 あなたは家族OSの状態更新アシスタントです。
@@ -56,7 +72,7 @@ FAMILY_CONTEXT_UPDATE_PROMPT = """
 - 1項目は短く要約する
 - 医療断定はしない
 - JSON以外は出力しない
-"""
+""".strip()
 
 QUICK_INPUT_PROMPT_TEMPLATE = """
 あなたは家族OSの音声クイック入力解析アシスタントです。
@@ -175,7 +191,10 @@ def generate_consultation_answer(user_input: str, context_text: str) -> str:
         return "OPENAI_API_KEY が未設定です。secrets.toml を確認してください。"
 
     client = get_openai_client()
-    prompt = build_consultation_prompt(user_input=user_input.strip(), context_text=str(context_text).strip())
+    prompt = build_consultation_prompt(
+        user_input=user_input.strip(),
+        context_text=str(context_text).strip(),
+    )
 
     response = client.responses.create(
         model=OPENAI_MODEL,
