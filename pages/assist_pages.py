@@ -462,6 +462,139 @@ def _build_consult_select_options(df: pd.DataFrame) -> pd.DataFrame:
 
     return work[["consultation_id", "label"]].reset_index(drop=True)
 
+def _extract_consult_sections(answer_text: str) -> dict[str, str]:
+    text = str(answer_text or "").replace("\r\n", "\n").strip()
+
+    result = {
+        "conclusion": "",
+        "actions": "",
+        "reasons": "",
+        "watch": "",
+        "contact": "",
+        "full": text,
+    }
+
+    if not text:
+        return result
+
+    section_map = [
+        ("conclusion", ["まず結論", "結論"]),
+        ("reasons", ["そう考える理由", "理由"]),
+        ("actions", ["今やること"]),
+        ("watch", ["様子を見るポイント", "様子見ポイント"]),
+        ("contact", ["受診・産院連絡を検討する目安", "受診・産院連絡の目安", "受診目安"]),
+    ]
+
+    buckets = {
+        "conclusion": [],
+        "actions": [],
+        "reasons": [],
+        "watch": [],
+        "contact": [],
+    }
+
+    current_key = "conclusion"
+
+    for raw_line in text.split("\n"):
+        line = str(raw_line or "").strip()
+
+        if not line:
+            buckets[current_key].append("")
+            continue
+
+        normalized = line
+        normalized = normalized.lstrip("#").strip()
+        normalized = normalized.lstrip("-•●■◆◇＊*").strip()
+
+        matched = None
+        for key, names in section_map:
+            for name in names:
+                if (
+                    normalized == name
+                    or normalized.startswith(name + "：")
+                    or normalized.startswith(name + ":")
+                ):
+                    matched = (key, name)
+                    break
+            if matched:
+                break
+
+        if matched:
+            current_key = matched[0]
+            remainder = normalized.replace(matched[1], "", 1).lstrip(":：").strip()
+            if remainder:
+                buckets[current_key].append(remainder)
+            continue
+
+        buckets[current_key].append(line)
+
+    for key in buckets:
+        result[key] = "\n".join(buckets[key]).strip()
+
+    return result
+
+
+def _render_consult_result_card(title: str, emoji: str, body: str):
+    if not str(body).strip():
+        return
+
+    st.markdown(
+        f"""
+        <div class='section-card'>
+            <div class='section-title'>{emoji} {title}</div>
+            <div class='section-desc' style='white-space: pre-wrap;'>{body}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _render_consult_result_ui(
+    consultation_id: str,
+    consult_tag: str,
+    consult_input: str,
+    answer: str,
+):
+    sections = _extract_consult_sections(answer)
+
+    st.markdown(
+        """
+        <div class='section-card'>
+            <div class='section-title'>🌸 相談結果</div>
+            <div class='section-desc'>初心者パパママでも読みやすいように、結論→行動→理由の順で整理しています。</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    meta_lines = []
+    if consultation_id:
+        meta_lines.append(f"相談ID: {consultation_id}")
+    if consult_tag:
+        meta_lines.append(f"カテゴリ: {consult_tag}")
+
+    if meta_lines:
+        st.caption(" / ".join(meta_lines))
+
+    if consult_input:
+        st.markdown(
+            f"""
+            <div class='section-card'>
+                <div class='section-title'>🗣️ 相談内容</div>
+                <div class='section-desc' style='white-space: pre-wrap;'>{consult_input}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    _render_consult_result_card("まず結論", "✅", sections["conclusion"])
+    _render_consult_result_card("今やること", "📝", sections["actions"])
+    _render_consult_result_card("そう考える理由", "🧠", sections["reasons"])
+    _render_consult_result_card("様子を見るポイント", "👀", sections["watch"])
+    _render_consult_result_card("受診・連絡を考える目安", "☎️", sections["contact"])
+
+    with st.expander("回答全文を見る"):
+        st.markdown(answer if str(answer).strip() else "回答なし")
 
 def render_consult(recorded_by: str):
     render_page_head(
@@ -477,6 +610,15 @@ def render_consult(recorded_by: str):
     except Exception:
         pass
 
+    query_consultation_id = ""
+    try:
+        query_consultation_id = str(st.query_params.get("consultation_id", "")).strip()
+    except Exception:
+        query_consultation_id = ""
+
+    if query_consultation_id:
+        st.session_state["selected_consultation_id"] = query_consultation_id
+
     context_text = build_consultation_context_text()
 
     st.markdown(
@@ -488,6 +630,7 @@ def render_consult(recorded_by: str):
         """,
         unsafe_allow_html=True,
     )
+
     family_context_rows = get_family_context_dict()
     if family_context_rows:
         st.markdown(
@@ -500,6 +643,7 @@ def render_consult(recorded_by: str):
             unsafe_allow_html=True,
         )
         st.text(build_family_context_text())
+
     with st.expander("参考に渡す直近コンテキストを見る"):
         st.text(context_text)
 
@@ -545,6 +689,12 @@ def render_consult(recorded_by: str):
                         st.session_state["latest_consult_tag"] = tag
                         st.session_state["selected_consultation_id"] = consultation_id
                         st.session_state["current_page"] = PAGE_CONSULT
+
+                        try:
+                            st.query_params["page"] = PAGE_CONSULT
+                            st.query_params["consultation_id"] = consultation_id
+                        except Exception:
+                            pass
 
                         st.rerun()
 
@@ -596,8 +746,15 @@ def render_consult(recorded_by: str):
                 index=selected_index,
                 key="consult_history_select",
             )
-            selected_consultation_id = str(label_map[selected_label])
+
+            selected_consultation_id = str(label_map[selected_label]).strip()
             st.session_state["selected_consultation_id"] = selected_consultation_id
+
+            try:
+                st.query_params["page"] = PAGE_CONSULT
+                st.query_params["consultation_id"] = selected_consultation_id
+            except Exception:
+                pass
 
             selected_row = get_consultation_by_id(selected_consultation_id)
             if selected_row:
@@ -606,55 +763,34 @@ def render_consult(recorded_by: str):
                 consult_tag = str(selected_row.get("tag", "")).strip()
 
     if answer:
+        _render_consult_result_ui(
+            consultation_id=selected_consultation_id,
+            consult_tag=consult_tag,
+            consult_input=consult_input,
+            answer=answer,
+        )
+
         st.markdown(
             """
             <div class='section-card'>
-                <div class='section-title'>🌸 相談結果</div>
-                <div class='section-desc'>行動の優先順位が分かる形で表示します。</div>
+                <div class='section-title'>✍️ 訂正したいとき</div>
+                <div class='section-desc'>
+                    LINEでは <code>訂正:</code> または <code>修正:</code> で始めて送ると、直近の相談内容を前提に再回答させられます。<br>
+                    例: <code>訂正: さっきの回答で、昨日は出血じゃなくて内診後の少量出血です</code>
+                </div>
             </div>
             """,
             unsafe_allow_html=True,
         )
-
-        if consult_tag:
-            st.caption(f"カテゴリ: {consult_tag}")
-        if consult_input:
-            st.caption(f"相談内容: {consult_input}")
-
-        st.markdown(answer)
 
     if not recent_consults.empty:
         st.markdown(
             """
             <div class='section-card'>
-                <div class='section-title'>🕘 最近の相談一覧</div>
-                <div class='section-desc'>直近の相談履歴を確認できます。</div>
+                <div class='section-title'>📚 保存済み相談件数</div>
+                <div class='section-desc'>相談履歴の蓄積状況を確認できます。</div>
             </div>
             """,
             unsafe_allow_html=True,
         )
-
-        work = recent_consults.copy()
-        if "timestamp" in work.columns:
-            work["timestamp"] = pd.to_datetime(work["timestamp"], errors="coerce")
-            work = work.sort_values("timestamp", ascending=False)
-            work["時刻"] = work["timestamp"].dt.strftime("%m/%d %H:%M")
-        else:
-            work["時刻"] = ""
-
-        if "tag" not in work.columns:
-            work["tag"] = ""
-        if "user_input" not in work.columns:
-            work["user_input"] = ""
-        if "recorded_by" not in work.columns:
-            work["recorded_by"] = ""
-
-        work["カテゴリ"] = work["tag"].astype(str)
-        work["相談"] = work["user_input"].astype(str)
-        work["記録者"] = work["recorded_by"].astype(str)
-
-        st.dataframe(
-            work[["時刻", "カテゴリ", "相談", "記録者"]].head(10),
-            use_container_width=True,
-            hide_index=True,
-        )
+        st.caption(f"{len(recent_consults)}件の相談履歴があります。")
