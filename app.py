@@ -1,7 +1,13 @@
 from __future__ import annotations
 
+import ai_service
 import streamlit as st
 
+st.write("ai_service file:", ai_service.__file__)
+st.write(
+    "has FAMILY_CONTEXT_UPDATE_PROMPT:",
+    hasattr(ai_service, "FAMILY_CONTEXT_UPDATE_PROMPT"),
+)
 from config import (
     APP_ICON,
     APP_NAME,
